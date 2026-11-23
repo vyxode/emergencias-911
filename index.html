@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="Simulador de operador de emergencias 911 para tablet.">
+  <title>Central 911 · Villaclara</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="iconos/icono-192.png">
+  <link rel="preload" href="fuentes/barlow-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <!-- Bloqueos: el juego solo funciona en tablet y en horizontal -->
+  <div id="bloqueo" class="capa-total" hidden>
+    <div class="aviso"><div class="aviso-ic">📵</div><h1>Solo para tablet</h1>
+      <p>Central 911 está diseñado exclusivamente para tablets táctiles. Ábrelo desde tu tablet Android.</p></div>
+  </div>
+  <div id="girar" class="capa-total"><div class="aviso"><div class="aviso-ic girando">📱</div><h1>Gira la tablet</h1><p>Se juega en horizontal.</p></div></div>
+
+  <!-- Menú principal: portada a la izquierda y cuadrante de turnos a la derecha -->
+  <section id="menu" class="pantalla">
+    <div class="portada">
+      <div class="piloto-grande" aria-hidden="true"><i></i></div>
+      <h1 class="marca">Central 911</h1>
+      <p class="lema">Villaclara te llama. Contesta, localiza y envía ayuda antes de que sea tarde.</p>
+      <div id="continuar"></div>
+      <div class="menu-botones">
+        <button class="btn fantasma" data-a="instalar" id="btn-instalar">📲 Instalar en la tablet</button>
+        <button class="btn fantasma" data-a="sonido" id="btn-sonido-menu">🔊 Sonido</button>
+        <button class="btn fantasma" data-a="voz" id="btn-voz-menu">🗣️ Voces</button>
+      </div>
+      <p id="ayuda-instalar" class="nota" hidden>Para instalarla: menú <b>⋮</b> de Chrome → <b>Instalar aplicación</b> (o «Añadir a pantalla de inicio»).</p>
+    </div>
+    <div class="cuadrante">
+      <h2>Cuadrante de turnos</h2>
+      <div id="niveles" class="niveles"></div>
+    </div>
+  </section>
+
+  <!-- Juego -->
+  <section id="juego" class="pantalla" hidden>
+    <header id="hud">
+      <div class="hud-nivel"><span id="hud-num"></span><b id="hud-titulo"></b></div>
+      <div class="hud-centro"><span id="hud-reloj">08:00</span><div class="hud-progreso"><i id="hud-barra"></i></div></div>
+      <div class="hud-der"><span id="hud-puntos">0</span><button class="btn-ic" data-a="sonido" id="btn-sonido">🔊</button><button class="btn-ic" data-a="pausa">⏸</button></div>
+    </header>
+    <div id="izq">
+      <div id="lineas"></div>
+      <div id="llamada"></div>
+      <div id="radio"></div>
+    </div>
+    <div id="der">
+      <div id="mapa-caja"><canvas id="mapa"></canvas><div id="mapa-leyenda"></div></div>
+      <div id="despacho"></div>
+    </div>
+  </section>
+
+  <!-- Capas modales -->
+  <div id="capa" class="capa" hidden><div id="capa-caja" class="capa-caja"></div></div>
+
+  <script src="js/datos.js"></script>
+  <script src="js/escenarios.js"></script>
+  <script src="js/sonido.js"></script>
+  <script src="js/juego.js"></script>
+</body>
+</html>
