@@ -2,9 +2,16 @@
 
 Simulador de operador de emergencias para **tablet Android en horizontal**. Contestas llamadas, sacas los datos al llamante, localizas la emergencia en el mapa de Villaclara y envías policía, bomberos, ambulancias o helicóptero. Mientras llegan, puedes guiar por teléfono una RCP, un parto o una evacuación.
 
-- **Mapa a pantalla completa**: pellizca o toca dos veces para ampliar, arrastra para moverte. Toca un aviso para abrir su panel y toca las unidades para elegirlas.
-- **Panel de aviso** con tres pestañas: *Llamada* (la conversación), *Despacho* (unidades y lo que tardan en llegar) y *En el lugar* (estado de la intervención y opción de retirar unidades).
-- **Llamadas vivas**: preguntas de seguimiento según el tipo de emergencia, respuestas que cambian en cada partida, bromistas que se cansan y cuelgan, y llamantes que se despiden cuando la ayuda va en camino.
+La pantalla imita un puesto real de una central 911 con sistema de despacho (CAD):
+
+- **Llamante (ANI/ALI)**: número, titular, tipo de línea y ubicación aproximada hasta que el llamante la confirma.
+- **Entrevista**: la conversación y las preguntas. Con **🎙 Mantén para hablar** puedes preguntar en voz alta: el juego entiende lo que dices (necesita internet, usa el reconocimiento de voz de Chrome).
+- **Mapa**: plano de la ciudad con edificios, parques, río, mar y puerto. Pellizca o toca dos veces para ampliar y arrastra para moverte.
+- **Incidente**: ficha con prioridad (P1 a P4), datos, recomendación de unidades y despacho. «Seleccionar recomendadas» elige las unidades más rápidas.
+- **Cola de incidentes** y **tablero de unidades** con su estado y lo que tardan en llegar.
+- **Telefonía** (4 líneas de 911) y **radio** con los avisos de las unidades.
+- Una **guía de siguiente paso** arriba resalta siempre el botón que toca pulsar, así que se juega sin estudiar nada.
+- **Llamadas vivas**: preguntas de seguimiento, respuestas que cambian en cada partida, bromistas que cuelgan y llamantes que se despiden cuando la ayuda va en camino.
 - **Voces realistas** opcionales (ver abajo).
 
 **Jugar:** https://vyxode.github.io/emergencias-911/
@@ -51,6 +58,8 @@ js/datos.js           Mapa, unidades, preguntas, protocolos y niveles
 js/escenarios.js      Plantillas de llamadas (unas 90)
 js/sonido.js          Sonido sintetizado, filtro de teléfono y voz del sistema
 js/voz.js             Descarga y uso de las voces neuronales
+js/escucha.js         Reconocimiento de voz del jugador e interpretación de lo que dice
+js/mapa.js            Plano de la ciudad: calles, edificios, río, mar y puerto
 js/juego.js           Motor: llamadas, mapa, rutas, despacho, minijuegos y guardado
 voz/                  Motor de voz: worker, onnxruntime-web y piper-phonemize
 sw.js                 Service worker (juego sin conexión)

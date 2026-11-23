@@ -259,7 +259,7 @@ const NIVELES = [
   {
     titulo: 'Fiestas de Villaclara', hora: 21, zonas: ['centro', 'norte', 'poligono', 'puerto'], cada: [45, 68], fiesta: true,
     unidades: [['P', 'com', 4], ['A', 'hos', 3], ['B', 'bom', 2], ['B', 'bom2', 1], ['H', 'hos', 1]],
-    intro: 'Noche de fiestas: miles de personas en el Centro, que está cortado al tráfico (en naranja, más lento). Niños perdidos, fuegos artificiales y mucha gente que llama sin motivo.',
+    intro: 'Noche de fiestas: miles de personas en el Centro, que está cortado al tráfico (calles en violeta, más lentas). Niños perdidos, fuegos artificiales y mucha gente que llama sin motivo.',
     nuevo: ['Centro lleno de gente (rutas lentas)', 'Niños perdidos', 'Fuegos artificiales'],
     reto: ['Dejar sin contestar como mucho 2 llamadas', s => s.perdidas <= 2],
     guion: [{ t: 1100, llamada: 'remedios_bolso' }, { t: 2050, llamada: 'fuegos_final' }, { t: 2040, radio: 'Empieza el castillo de fuegos en el Parque Central. Atentos.' }],

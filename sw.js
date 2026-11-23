@@ -1,6 +1,6 @@
 // Service worker: guarda el juego para jugar sin conexión. Sube VERSION al publicar cambios.
-const VERSION = 'c911-v2';
-const ARCHIVOS = ['./', 'index.html', 'css/estilos.css', 'js/datos.js', 'js/escenarios.js', 'js/sonido.js', 'js/voz.js', 'js/juego.js',
+const VERSION = 'c911-v4';
+const ARCHIVOS = ['./', 'index.html', 'css/estilos.css', 'js/datos.js', 'js/escenarios.js', 'js/sonido.js', 'js/voz.js', 'js/escucha.js', 'js/mapa.js', 'js/juego.js',
   'manifest.webmanifest', 'iconos/icono.svg', 'iconos/icono-192.png', 'iconos/icono-512.png'];
 // Archivos grandes que no cambian (fuentes y motor de voz): se sirven desde la caché sin volver a descargarlos
 const FIJOS = /\/(fuentes|voz)\//;

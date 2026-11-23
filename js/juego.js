@@ -31,11 +31,6 @@ let flotantes = [], ultimo = 0, acumTick = 0, acumGuardar = 0, mini = null, inst
 const audios = new Map();           // voz neuronal en preparación por llamada
 
 // ======================= Grafo de calles =======================
-const ARISTAS = [];
-for (let r = 0; r < FILAS; r++) for (let c = 0; c < COLS; c++) {
-  if (c < COLS - 1) ARISTAS.push([nodo(c, r), nodo(c + 1, r)]);
-  if (r < FILAS - 1 && (r !== 5 || PUENTES.includes(c))) ARISTAS.push([nodo(c, r), nodo(c, r + 1)]);
-}
 const VECINOS = Array.from({ length: COLS * FILAS }, () => []);
 ARISTAS.forEach(([a, b]) => { VECINOS[a].push(b); VECINOS[b].push(a); });
 const clave = (a, b) => a < b ? a + '-' + b : b + '-' + a;
@@ -59,9 +54,9 @@ function ruta(desde, hasta) {
 const VEL_BASE = 0.55;
 // Segundos estimados que tardaría una unidad en llegar a un nodo
 function eta(u, destino) {
-  const [tx, ty] = cr(destino);
+  const [tx, ty] = posNodo(destino);
   if (u.tipo === 'H') return Math.hypot(tx - u.x, ty - u.y) / (VEL_BASE * TIPOS.H.vel);
-  const desde = u.ruta.length ? u.ruta[0] : u.desde, [dx, dy] = cr(desde);
+  const desde = u.ruta.length ? u.ruta[0] : u.desde, [dx, dy] = posNodo(desde);
   return (ruta(desde, destino).coste + Math.hypot(dx - u.x, dy - u.y)) / (VEL_BASE * TIPOS[u.tipo].vel);
 }
 
@@ -76,7 +71,8 @@ function nuevaPartida(nivel) {
   lvl.unidades.forEach(([tipo, base, cant]) => {
     for (let i = 0; i < cant; i++) {
       const b = BASES[base], num = unidades.filter(u => u.tipo === tipo).length + 1;
-      unidades.push({ id: `${tipo}-${num}`, tipo, base, x: b.c, y: b.r, ruta: [], desde: nodo(b.c, b.r), est: 'libre', inc: null });
+      const [bx, by] = posNodo(nodo(b.c, b.r));
+      unidades.push({ id: `${tipo}-${num}`, tipo, base, x: bx, y: by, ruta: [], desde: nodo(b.c, b.r), est: 'libre', inc: null });
     }
   });
   S = {
@@ -149,7 +145,7 @@ function nuevaLlamada(p, extra = {}) {
   };
   S.cola.push(c); S.usados[p.id] = (S.usados[p.id] || 0) + 1; S.ultimaPl = p.id;
   Sonido.play('timbre', linea); try { navigator.vibrate?.(150); } catch { /* sin vibración */ }
-  tip('sonando', 'Suena el teléfono: toca el auricular verde de abajo para contestar.');
+  tip('sonando', 'Suena el teléfono: toca la línea que parpadea, abajo a la izquierda.');
   return true;
 }
 
@@ -161,7 +157,7 @@ const lang = c => plDe(c).en ? 'en' : 'es';
 function atender(id) {
   if (S.activa) return;
   const c = S.cola.find(x => x.id === id); if (!c) return;
-  c.est = 'activa'; S.activa = c.id; c.tA = S.t; S.tab = 'llamada'; S.panel = true;
+  c.est = 'activa'; S.activa = c.id; c.tA = S.t;
   Sonido.play('descolgar'); Sonido.linea(true);
   c.log.push({ yo: 1, t: lang(c) === 'en' ? '911, what is your emergency?' : azar(['911, ¿cuál es su emergencia?', 'Emergencias 911, dígame.', '911, le escucho. ¿Qué ocurre?']) });
   responder(c, txt(plDe(c).ab), null, 0.6);
@@ -175,17 +171,17 @@ function armar(partes) {
 }
 const seguimiento = (p, k) => (SEGUIMIENTO[p.tipo] || []).find(x => x[0] === k);
 
-function preguntar(q) {
+function preguntar(q, dicho) {
   const c = activa(); if (!c || c.pend || c.fin) return;
   const p = plDe(c), L = lang(c), D = RESPUESTAS_DEFECTO[L];
   Sonido.play('tecla'); c.nPreg++;
   if (q.startsWith('x:')) { // pregunta de seguimiento
     const s = seguimiento(p, q.slice(2));
-    c.log.push({ yo: 1, t: L === 'en' ? s[2] : s[1] });
+    c.log.push({ yo: 1, t: dicho || (L === 'en' ? s[2] : s[1]) });
     if (c.pan > 0) return responder(c, txt(D.panico), null);
     return responder(c, armar(azar(L === 'en' ? s[4] : s[3])), q);
   }
-  c.log.push({ yo: 1, t: azar(PREGUNTAS[q][L]) });
+  c.log.push({ yo: 1, t: dicho || azar(PREGUNTAS[q][L]) });
   if (q === 'calma') {
     if (c.pan > 0) { c.pan--; return responder(c, txt(D.calmado), 'calma'); }
     return responder(c, txt(D.calma), null);
@@ -252,7 +248,7 @@ function crearIncidente(c) {
   S.inc.push(inc); c.inc = inc.id; S.sel = inc.id; S.selU = [];
   if (esReal(p)) S.stats.total++;
   Sonido.play('alarma'); destello(); centrarEn(inc.nodo, 1.6);
-  tip('pin', '¡Localizado! Pulsa «Despachar» y elige las unidades. También puedes tocarlas en el mapa.');
+  tip('pin', '¡Localizado! Pulsa «Seleccionar recomendadas» y después «Despachar».');
 }
 
 function colgar(forzar, llamante = false) {
@@ -276,7 +272,6 @@ function colgar(forzar, llamante = false) {
   if (!esReal(p)) { const inc = S.inc.find(i => i.id === c.inc); if (inc && !inc.env.length) S.inc = S.inc.filter(i => i !== inc); }
   S.cola = S.cola.filter(x => x.id !== c.id); S.activa = null;
   if (S.sel && !S.inc.some(i => i.id === S.sel)) S.sel = null;
-  S.tab = 'despacho';
   ui();
 }
 
@@ -305,7 +300,6 @@ function enviar() {
   inc.tEnv = S.t;
   S.selU = []; Sonido.play('sirena'); Sonido.play('radio');
   tip('envio', 'Unidades en camino. Cuando el llamante tenga la ayuda en camino, se despedirá y colgará.');
-  S.tab = activa() ? 'llamada' : 'lugar';
   ui();
 }
 
@@ -329,7 +323,7 @@ function planificar(u, destino) {
 function moverUnidades(dt) {
   for (const u of S.unidades) {
     if (!u.ruta.length) continue;
-    const [tx, ty] = cr(u.ruta[0]), dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy);
+    const [tx, ty] = posNodo(u.ruta[0]), dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy);
     const f = u.tipo === 'H' ? 1 : factor(u.desde, u.ruta[0]);
     const paso = VEL_BASE * TIPOS[u.tipo].vel / f * dt;
     if (d <= paso) {
@@ -403,7 +397,7 @@ function actualizarIncidentes() {
 // ---------- Puntos, radio y consejos ----------
 function sumar(n, texto, nodoTxt) {
   S.puntos += n;
-  const [x, y] = nodoTxt != null ? cr(nodoTxt) : [COLS / 2, FILAS / 2];
+  const [x, y] = nodoTxt != null ? posNodo(nodoTxt) : [COLS / 2, FILAS / 2];
   flotantes.push({ x, y, t: 0, txt: `${n > 0 ? '+' : ''}${n} ${texto}`, mal: n < 0 });
 }
 function radio(t, quien = 'Marta') {
@@ -459,7 +453,7 @@ function cortarAleatorias(tipo, n, f) {
 }
 const nombreArista = ([a, b]) => { const [c1, r1] = cr(a), [c2] = cr(b); return c1 === c2 ? AVENIDAS[c1] : CALLES[r1]; };
 function inundar() { radio(`Calles inundadas, entre ellas ${nombreArista(cortarAleatorias('agua', 6, 4)[0])}. Las unidades irán más lentas por las zonas en azul.`, 'Marta'); }
-function atasco() { radio(`Atasco en ${nombreArista(cortarAleatorias('atasco', 3, 3)[0])} (en naranja).`, 'Radio'); }
+function atasco() { radio(`Atasco en ${nombreArista(cortarAleatorias('atasco', 3, 3)[0])} (en rojo discontinuo).`, 'Radio'); }
 
 // ======================= Bucle principal =======================
 function bucle(ahora) {
@@ -492,13 +486,22 @@ const hora = () => {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 };
 
-// ======================= Interfaz =======================
+// ======================= Interfaz (puesto CAD) =======================
 const COLOR_SERV = { P: '#4c8dff', A: '#f4f7fb', B: '#ff4d4d', H: '#ffb547' };
+const CODIGO = { medico: 'MED', fuego: 'INC', policia: 'POL', trafico: 'TRF', rescate: 'RES', mixto: 'MUL', oculta: 'VIO', falsa: 'INF', noemerg: 'INF' };
 const ESCENA = {
   policia: 'Los agentes aseguran la zona y toman declaración.', medico: 'Los sanitarios atienden al paciente.', fuego: 'Los bomberos trabajan para controlar la situación.',
   trafico: 'Se atiende a los heridos y se despeja la calzada.', rescate: 'El equipo de rescate trabaja para sacar a las víctimas.', mixto: 'Varios servicios trabajan juntos en la escena.',
   oculta: 'La policía entra con cuidado y protege a la víctima.',
 };
+const EST_U = { libre: ['Disponible', 'disp'], vuelta: ['Regresa', 'regr'], ruta: ['En ruta', 'ruta'], escena: ['En escena', 'esc'] };
+const numInc = id => `${String(S.nivel === LIBRE_N ? 99 : S.nivel + 1).padStart(2, '0')}-${String(id).padStart(4, '0')}`;
+const llamadaDe = inc => S.cola.find(x => x.inc === inc.id);
+const conocido = inc => { const c = llamadaDe(inc); return !c || c.preg.que; };
+// Prioridad: P1 vida en riesgo ... P4 informativo
+const prioridad = inc => { const p = PL[inc.pl]; return !conocido(inc) ? '—' : !esReal(p) ? 'P4' : 'P' + (4 - p.grav); };
+const estadoInc = inc => inc.est === 'trabajo' || inc.env.some(id => S.unidades.find(u => u.id === id)?.est === 'escena') ? ['En escena', 'esc'] : inc.env.length ? ['Enviado', 'ruta'] : ['Pendiente', 'pend'];
+const etiqueta = inc => { const p = PL[inc.pl], c = llamadaDe(inc); return conocido(inc) ? (c?.preg.sino && p.et2 ? p.et2 : p.et) : 'Sin clasificar'; };
 
 function ui() {
   if (!S) return;
@@ -511,147 +514,163 @@ function ui() {
   $('#btn-sonido').textContent = Sonido.opciones.sonido ? '🔊' : '🔇';
   const h = (lvl.hora + S.t / DURACION * 8) % 24, dia = Math.max(0, Math.cos((h - 13) / 24 * 2 * Math.PI));
   $('#juego').style.setProperty('--dia', dia.toFixed(2));
-  pintarDock(); pintarPanel(); pintarRadio(); pintarAvisos();
+  pintarTelefonia(); pintarAli(); pintarEntrevista(); pintarFicha(); pintarCola(); pintarTablero(); pintarRadio();
+  const [texto, destino] = pista();
+  $('#pista').textContent = texto;
+  document.querySelectorAll('.guia').forEach(e => e.classList.remove('guia'));
+  if (destino) document.querySelector(destino)?.classList.add('guia');
 }
 
-// Muelle inferior: llamadas entrantes y llamada en curso
-function pintarDock() {
+// Botonera telefónica: cuatro líneas de 911 con piloto
+function pintarTelefonia() {
   const c = activa();
-  const sonando = S.cola.filter(x => x.est === 'sonando');
-  setHTML($('#dock'), (c ? `<button class="en-curso" data-a="tab" data-t="llamada"><i class="piloto"></i><span><b>En llamada</b><small class="dur-dock"></small></span></button>` : '') +
-    sonando.map(x => `<button class="entrante ${c ? 'retenida' : ''}" data-a="atender" data-id="${x.id}">
-      <span class="aro"></span><span class="auri">🎧</span><small>${x.tel}</small></button>`).join('') +
-    (!c && !sonando.length ? '<div class="dock-vacio">Sin llamadas</div>' : ''));
-  document.querySelectorAll('#dock .entrante').forEach(b => {
-    const x = S.cola.find(y => y.id === +b.dataset.id);
-    if (x) b.style.setProperty('--p', Math.min(1, (S.t - x.t0) / 55).toFixed(3));
-  });
-  const d = $('.dur-dock'); if (d && c) d.textContent = mmss(S.t - c.tA);
+  setHTML($('#telefonia'), `<span class="tel-et">911</span>` + [1, 2, 3, 4].map(l => {
+    const x = S.cola.find(y => y.linea === l);
+    if (!x) return `<div class="linea-tel libre"><i class="piloto"></i><span><b>Línea ${l}</b><small>Libre</small></span></div>`;
+    if (x.est === 'activa') return `<div class="linea-tel activa"><i class="piloto"></i><span><b>${x.tel}</b><small class="dur-l"></small></span></div>`;
+    return `<button class="linea-tel sonando ${c ? 'retenida' : ''}" data-a="atender" data-id="${x.id}"><i class="piloto"></i><span><b>${x.tel}</b><small>${c ? 'En espera' : 'Contestar'}</small></span><i class="espera" data-t0="${x.t0}"></i></button>`;
+  }).join('') + `<button class="btn tel-colgar" data-a="${S.confirmar && c ? 'colgar-ya' : 'colgar'}" ${c ? '' : 'disabled'}>${S.confirmar && c ? '¿Sin localizar? Toca otra vez' : '☎ Liberar'}</button>`);
+  document.querySelectorAll('#telefonia .espera').forEach(e => { e.style.width = `${Math.max(0, 100 - (S.t - e.dataset.t0) / 55 * 100)}%`; });
+  const d = $('.dur-l'); if (d && c) d.textContent = mmss(S.t - c.tA);
 }
 
-function pintarAvisos() {
-  $('#n-avisos').textContent = S.inc.length;
-  $('#btn-avisos').classList.toggle('hay', S.inc.some(i => i.est === 'abierto' && !i.env.length));
-  if ($('#lista-avisos').hidden) return;
-  setHTML($('#lista-avisos'), S.inc.length ? S.inc.map(i => {
-    const p = PL[i.pl], c = S.cola.find(x => x.inc === i.id), conocido = !c || c.preg.que;
-    const fondo = conocido ? Object.keys(i.nec).map(t => COLOR_SERV[t]) : ['#64748b'];
-    return `<button class="aviso-fila ${i.id === S.sel ? 'sel' : ''}" data-a="sel-inc" data-id="${i.id}">
-      <span class="aviso-ic" style="background:linear-gradient(135deg,${fondo.join(',')}${fondo.length < 2 ? ',' + fondo[0] : ''})">${conocido ? p.ic : '❓'}</span>
-      <span><b>#${i.id} ${esc(conocido ? p.et : 'Aviso sin clasificar')}</b><small>${esc(i.dir)}</small></span><span class="aviso-t">${mmss(S.t - i.t0)}</span></button>`;
-  }).join('') : '<p class="nota">No hay avisos abiertos.</p>');
+// ANI/ALI: número, titular, tipo de línea y ubicación (aproximada hasta que el llamante la confirma)
+function pintarAli() {
+  const c = activa();
+  if (!c) return setHTML($('#ali'), `<div class="pane-cab">LLAMANTE <span class="cab-nota">ANI/ALI</span></div><div class="ali vacio">Sin llamada en curso</div>`);
+  const p = plDe(c), z = DISTRITOS[distritoDe(...cr(c.nodo))].nombre;
+  setHTML($('#ali'), `<div class="pane-cab">LLAMANTE <span class="cab-nota">ANI/ALI</span><span class="cab-der">Línea ${c.linea}</span></div>
+    <div class="ali"><div><span>Número</span><b class="mono">${c.tel}</b></div><div><span>Titular</span><b>${esc(c.nom)}</b></div>
+    <div><span>Clase</span><b>${p.en ? 'Móvil roaming (UK)' : c.linea % 2 ? 'Móvil, fase II' : 'Fijo residencial'}</b></div><div><span>Idioma</span><b>${p.en ? 'Inglés' : 'Español'}</b></div>
+    <div class="ancho"><span>Ubicación</span><b class="${c.preg.donde ? 'ok' : 'aprox'}">${c.preg.donde ? '📍 ' + esc(c.vars.dir) : `Aproximada: ${z}, radio ±${150 + (c.id * 37) % 250} m`}</b></div></div>`);
 }
 
-function pintarRadio() {
-  setHTML($('#radio'), S.radio.slice(-3).map(r => `<div class="radio-l" data-n="${r.n}"><span>${r.h}</span><b>${esc(r.quien)}:</b> ${esc(r.t)}</div>`).join(''));
-}
-
-// Panel derecho con pestañas: Llamada, Despacho y En el lugar
-function pintarPanel() {
-  const c = activa(), inc = S.inc.find(i => i.id === S.sel);
-  const tabs = [c && ['llamada', '📞 Llamada'], inc && ['despacho', '🚨 Despacho'], inc && inc.env.length && ['lugar', '📍 En el lugar']].filter(Boolean);
-  const abierto = tabs.length && S.panel;
-  $('#juego').classList.toggle('con-panel', !!abierto);
-  if (!abierto) { $('#panel').hidden = true; return; }
-  if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
-  $('#panel').hidden = false;
-  setHTML($('#panel-tabs'), tabs.map(([k, n]) => `<button class="tab ${S.tab === k ? 'on' : ''}" data-a="tab" data-t="${k}">${n}</button>`).join('') +
-    (c ? '' : '<button class="tab cerrar" data-a="cerrar-panel" aria-label="Cerrar">✕</button>'));
-  const cuerpo = $('#panel-cuerpo');
-  if (S.tab === 'llamada') pintarLlamada(cuerpo, c);
-  else if (S.tab === 'despacho') pintarDespacho(cuerpo, inc);
-  else pintarLugar(cuerpo, inc);
-}
-
-function pintarLlamada(el, c) {
-  const p = plDe(c), L = lang(c);
-  const nervios = c.pan > 0 ? `<span class="chip rojo">Muy nervioso: cálmale</span>` : `<span class="chip verde">Colabora</span>`;
-  const log = c.log.map(l => `<div class="linea ${l.yo ? 'yo' : 'el'}">${esc(l.t)}</div>`).join('') + (c.pend ? '<div class="linea el escribiendo"><i></i><i></i><i></i></div>' : '');
-  const etq = c.preg.sino && p.et2 ? p.et2 : p.et;
-  const dato = (k, v) => c.preg[k] ? `<b>${esc(rellenar(v, c))}</b>` : '<span class="falta">—</span>';
-  const completa = c.preg.que && c.preg.heridos && c.preg.peligro && (p.tipo !== 'oculta' || c.preg.sino) || (S.nivel < 2 && c.preg.que);
-  let rec = '';
-  if (completa) {
-    rec = p.rec ? p.rec : p.tipo === 'falsa' ? '⚠️ Datos poco creíbles: ¿es una broma?'
-      : 'Recomendado: ' + Object.entries(p.nec).map(([t, n]) => `${TIPOS[t].ic}×${n}`).join(' ');
+function pintarEntrevista() {
+  const el = $('#entrevista'), c = activa();
+  if (!c) {
+    return setHTML(el, `<div class="pane-cab">ENTREVISTA</div><div class="sin-llamada"><div class="auriculares">🎧</div><p>Puesto libre</p>
+      <small>${S.cola.length ? 'Hay líneas sonando: contesta abajo.' : 'Las llamadas entrantes parpadean en la botonera de abajo.'}</small></div>`);
   }
-  // Las preguntas ya hechas desaparecen (salvo calmar); las de seguimiento aparecen tras saber qué pasa
+  const p = plDe(c), L = lang(c);
+  const log = c.log.map(l => `<div class="linea ${l.yo ? 'yo' : 'el'}"><span>${l.yo ? 'OPERADOR' : 'LLAMANTE'}</span>${esc(l.t)}</div>`).join('') + (c.pend ? '<div class="linea el escribiendo"><i></i><i></i><i></i></div>' : '');
   const base = ['que', 'donde', 'heridos', 'peligro', 'respira', 'calma', ...(S.nivel >= 3 ? ['sino'] : [])].filter(q => q === 'calma' || !c.preg[q]);
   const extra = c.preg.que ? c.extra.filter(k => !c.preg['x:' + k]).map(k => { const s = seguimiento(p, k); return [`x:${k}`, L === 'en' ? s[2] : s[1]]; }) : [];
   const ops = [...base.map(q => [q, PREGUNTAS[q][L][0]]), ...extra];
   const puedeAyudar = p.ayuda && c.preg.que && !c.ayuda && c.pan === 0;
-  const conf = S.confirmar === c.id;
-  const inc = S.inc.find(i => i.id === c.inc);
-  setHTML(el, `
-    <div class="llam-cab">
-      <div class="ani"><b>${esc(c.nom)}</b><small>${c.tel}, línea ${c.linea}${p.en ? ', inglés' : ''}</small></div>
-      <div class="onda" aria-hidden="true">${'<i></i>'.repeat(9)}</div>
-      <div class="llam-der"><span class="duracion"></span>${nervios}</div>
-    </div>
+  setHTML(el, `<div class="pane-cab">ENTREVISTA <span class="onda" aria-hidden="true">${'<i></i>'.repeat(7)}</span>
+      <span class="cab-der">${c.pan > 0 ? '<span class="chip rojo">Muy nervioso</span>' : '<span class="chip verde">Colabora</span>'}</span></div>
     <div class="transcripcion" id="trans">${log}</div>
-    <div class="ficha">
-      <div><span>Qué pasa</span>${c.preg.que ? `<b>${p.ic} ${esc(etq)}</b>` : '<span class="falta">—</span>'}</div>
-      <div><span>Lugar</span>${c.preg.donde ? `<b>📍 ${esc(c.vars.dir)}</b>` : '<span class="falta">—</span>'}</div>
-      <div><span>Heridos</span>${dato('heridos', p.fh || 'Ninguno')}</div>
-      <div><span>Peligro</span>${dato('peligro', p.fp || 'Ninguno')}</div>
-      ${c.notas.length ? `<div class="notas"><span>Notas</span>${c.notas.map(n => `<b>${esc(n)}</b>`).join('')}</div>` : ''}
-      ${rec ? `<div class="rec">${esc(rec)}</div>` : ''}
-    </div>
     <div class="opciones ${c.pend || c.fin ? 'esperando' : ''}">
       ${ops.map(([q, t]) => `<button class="op ${q === 'calma' && c.pan > 0 ? 'urge' : ''} ${q.startsWith('x:') ? 'extra' : ''}" data-a="preguntar" data-q="${q}">${esc(t)}</button>`).join('')}
     </div>
     <div class="acciones">
+      ${Escucha.disponible ? `<button class="btn hablar" id="btn-hablar" data-hablar="1">🎙 Mantén para hablar</button>` : ''}
       ${puedeAyudar ? `<button class="btn ayuda" data-a="ayuda">🩺 ${esc(p.ayuda === 'rcp' ? 'Guiar RCP' : PROTOCOLOS[p.ayuda][0])}</button>` : ''}
-      ${inc && !inc.env.length ? '<button class="btn despachar" data-a="tab" data-t="despacho">🚨 Despachar</button>' : ''}
-      <button class="btn colgar ${conf ? 'confirma' : ''}" data-a="${conf ? 'colgar-ya' : 'colgar'}">${conf ? '¿Colgar sin localizar? Toca otra vez' : '☎️ Colgar'}</button>
     </div>`);
-  el.querySelector('.duracion').textContent = mmss(S.t - (c.tA ?? S.t));
   el.querySelector('.onda').classList.toggle('habla', !!(c.pend || S.t < (c.habla || 0)));
+  const b = $('#btn-hablar'); if (b) b.classList.toggle('escuchando', Escucha.activa);
   const t = $('#trans'); if (t && t._n !== c.log.length + !!c.pend) { t._n = c.log.length + !!c.pend; t.scrollTop = t.scrollHeight; }
 }
 
-function cabeceraInc(inc) {
-  const p = PL[inc.pl], c = S.cola.find(x => x.inc === inc.id), conocido = !c || c.preg.que;
-  const resto = Math.max(0, inc.lim - (S.t - inc.t0));
-  const estado = inc.est === 'trabajo' ? `<span class="chip verde">Trabajando</span>` : `<span class="chip ${resto ? 'ambar' : 'rojo'}">⏱ ${resto ? Math.ceil(resto) + ' s' : 'Retrasado'}</span>`;
-  const serv = conocido ? Object.keys(inc.nec).map(t => `<i style="background:${COLOR_SERV[t]}"></i>`).join('') : '<i style="background:#64748b"></i>';
-  return `<div class="inc-cab"><div class="inc-serv">${serv}</div><div><b>#${inc.id} ${conocido ? p.ic + ' ' + esc(c?.preg.sino && p.et2 ? p.et2 : p.et) : '❓ Aviso sin clasificar'}</b>
-    <small>📍 ${esc(inc.dir)}</small></div>${estado}</div>`;
+// Ficha del incidente seleccionado: datos, recomendación, unidades asignadas y despacho
+function pintarFicha() {
+  const inc = S.inc.find(i => i.id === S.sel);
+  if (!inc) return setHTML($('#ficha'), `<div class="pane-cab">INCIDENTE</div><div class="ficha-vacia">Selecciona un incidente en la cola o en el mapa.</div>`);
+  const p = PL[inc.pl], c = llamadaDe(inc), pr = prioridad(inc), k = conocido(inc);
+  const dato = (q, v) => !c || c.preg[q] ? esc(c ? rellenar(v, c) : v) : '<span class="falta">Sin preguntar</span>';
+  const completa = c && c.preg.que && c.preg.heridos && c.preg.peligro && (p.tipo !== 'oculta' || c.preg.sino) || (S.nivel < 2 && c?.preg.que);
+  const rec = !c ? '' : !completa ? '<span class="falta">Completa la entrevista (qué pasa, heridos y peligro) para ver la recomendación</span>'
+    : p.rec ? esc(p.rec) : p.tipo === 'falsa' ? '⚠️ Datos poco creíbles: ¿es una broma? Si lo es, libera la línea.' : Object.entries(p.nec).map(([t, n]) => `<span class="serv" style="--c:${COLOR_SERV[t]}">${TIPOS[t].ic} ${TIPOS[t].nombre} ×${n}</span>`).join('') +
+      (faltanTipos(inc).length ? '<button class="btn btn-recomendadas" data-a="recomendadas">✔ Seleccionar recomendadas</button>' : '');
+  const asignadas = inc.env.map(id => {
+    const u = S.unidades.find(x => x.id === id), [e, cl] = EST_U[u.est];
+    return `<span class="asig ${cl}">${TIPOS[u.tipo].ic} <b>${u.id}</b> ${e}${u.est === 'ruta' ? ` ${Math.round(eta(u, inc.nodo))} s` : ''}<button data-a="retirar" data-id="${u.id}" aria-label="Retirar ${u.id}">✕</button></span>`;
+  }).join('');
+  const prog = inc.est === 'trabajo' ? Math.min(1, 1 - (inc.fin - S.t) / (p.trabajo || 6 + 4 * p.grav)) : 0;
+  const resto = Math.max(0, inc.lim - (S.t - inc.t0)), n = S.selU.length;
+  setHTML($('#ficha'), `<div class="pane-cab">INCIDENTE <b class="mono">${numInc(inc.id)}</b>
+      <span class="cab-der"><span class="prio ${pr}">${pr}</span><span class="chip ${inc.est === 'trabajo' ? 'verde' : resto ? 'ambar' : 'rojo'}">${inc.est === 'trabajo' ? 'En curso' : resto ? '⏱ ' + Math.ceil(resto) + ' s' : 'Retrasado'}</span></span></div>
+    <div class="ficha">
+      <div class="ancho"><span>Tipo</span><b>${k ? `<span class="cod">${CODIGO[p.tipo]}</span> ${p.ic} ${esc(etiqueta(inc))}` : '<span class="falta">Sin clasificar</span>'}</b></div>
+      <div class="ancho"><span>Ubicación</span><b>📍 ${esc(inc.dir)}</b></div>
+      <div><span>Heridos</span><b>${dato('heridos', p.fh || 'Ninguno')}</b></div><div><span>Peligro</span><b>${dato('peligro', p.fp || 'Ninguno')}</b></div>
+      ${c?.notas.length ? `<div class="ancho"><span>Notas</span>${c.notas.map(x => `<b class="nota-l">· ${esc(x)}</b>`).join('')}</div>` : ''}
+      <div class="ancho"><span>Recomendación</span><div class="rec">${rec}</div></div>
+      ${inc.env.length ? `<div class="ancho"><span>Unidades asignadas</span><div class="asignadas">${asignadas}</div>${inc.est === 'trabajo' ? `<p class="escena-t">${esc(ESCENA[p.tipo] || ESCENA.mixto)}</p><div class="progreso"><i style="width:${Math.round(prog * 100)}%"></i></div>` : ''}</div>` : ''}
+    </div>
+    <button class="btn enviar" data-a="enviar" ${n ? '' : 'disabled'}>${n ? `🚨 Despachar ${S.selU.join(', ')}` : 'Elige unidades en el tablero o en el mapa'}</button>`);
 }
 
-function pintarDespacho(el, inc) {
-  const n = S.selU.length;
-  const grupos = Object.keys(TIPOS).filter(t => S.unidades.some(u => u.tipo === t)).map(t => {
-    const lista = S.unidades.filter(u => u.tipo === t).map(u => ({ u, e: disponible(u) ? eta(u, inc.nodo) : Infinity })).sort((a, b) => a.e - b.e);
-    const necesita = inc.nec[t] ? `${inc.lleg[t] || 0}/${inc.nec[t]}` : '';
-    return `<div class="grupo"><div class="grupo-cab" style="--c:${COLOR_SERV[t]}">${TIPOS[t].ic} ${TIPOS[t].nombre}${necesita && inc.env.length ? ` <small>${necesita} en el lugar</small>` : ''}</div><div class="grupo-u">${
-      lista.map(({ u, e }) => {
-        const est = { libre: 'Libre', vuelta: 'Volviendo', ruta: 'En ruta', escena: 'Ocupada' }[u.est];
-        return `<button class="unidad ${u.est} ${S.selU.includes(u.id) ? 'sel' : ''}" data-a="unidad" data-id="${u.id}" ${disponible(u) ? '' : 'disabled'}>
-          <b>${u.id}</b><small>${disponible(u) ? `≈ ${Math.round(e)} s` : est}</small></button>`;
-      }).join('')}</div></div>`;
-  }).join('');
-  setHTML(el, `${cabeceraInc(inc)}<p class="nota">Elige unidades aquí o tocándolas en el mapa. Junto a cada una, lo que tardaría en llegar.</p>
-    <div class="grupos">${grupos}</div>
-    <button class="btn enviar" data-a="enviar" ${n ? '' : 'disabled'}>🚨 Enviar${n ? ` ${n} unidad${n > 1 ? 'es' : ''}` : ''}</button>`);
+// Cola de incidentes abiertos
+// Tipos de unidad que aún faltan por enviar a un incidente
+function faltanTipos(inc) {
+  const env = {}; inc.env.forEach(id => { env[id[0]] = (env[id[0]] || 0) + 1; });
+  return Object.entries(inc.nec).flatMap(([t, n]) => Array(Math.max(0, n - (env[t] || 0))).fill(t));
+}
+// Elige las unidades disponibles más rápidas de los tipos que faltan
+function seleccionarRecomendadas() {
+  const inc = S.inc.find(i => i.id === S.sel); if (!inc) return;
+  const sel = [];
+  for (const t of faltanTipos(inc)) {
+    const u = S.unidades.filter(x => x.tipo === t && disponible(x) && !sel.includes(x.id)).sort((a, b) => eta(a, inc.nodo) - eta(b, inc.nodo))[0];
+    if (u) sel.push(u.id);
+  }
+  if (!sel.length) return radio('No quedan unidades disponibles de ese tipo. Espera a que alguna quede libre.', 'Central');
+  S.selU = sel; Sonido.play('tecla'); ui();
 }
 
-function pintarLugar(el, inc) {
-  const p = PL[inc.pl], dur = p.trabajo || 6 + 4 * p.grav;
-  const prog = inc.est === 'trabajo' ? Math.min(1, 1 - (inc.fin - S.t) / dur) : 0;
-  const enviadas = {}; inc.env.forEach(id => { const t = id[0]; enviadas[t] = (enviadas[t] || 0) + 1; });
-  const faltan = Object.entries(inc.nec).map(([t, k]) => [t, k - (enviadas[t] || 0)]).filter(([, k]) => k > 0);
-  const filas = inc.env.map(id => {
-    const u = S.unidades.find(x => x.id === id);
-    const est = u.est === 'escena' ? 'En el lugar' : `En ruta, ≈ ${Math.round(eta(u, inc.nodo))} s`;
-    return `<div class="lugar-u"><span class="u-ic" style="--c:${COLOR_SERV[u.tipo]}">${TIPOS[u.tipo].ic}</span><b>${u.id}</b><small>${est}</small>
-      <button class="btn mini-btn" data-a="retirar" data-id="${u.id}">Retirar</button></div>`;
+// Siguiente paso recomendado: se muestra arriba y se resalta el botón correspondiente
+function pista() {
+  const c = activa(), sel = S.inc.find(i => i.id === S.sel);
+  if (c) {
+    const p = plDe(c), inc = S.inc.find(i => i.id === c.inc);
+    if (c.fin || c.pend) return ['Escucha al llamante…', null];
+    if (c.pan > 0) return ['Está muy nervioso: tranquilízale antes de preguntar', '[data-q="calma"]'];
+    if (!c.preg.que) return ['Pregunta qué ha pasado', '[data-q="que"]'];
+    if (!c.preg.donde || (p.des && !c.inc)) return ['Pregunta dónde está', '[data-q="donde"]'];
+    if (!c.preg.heridos) return ['Pregunta si hay heridos', '[data-q="heridos"]'];
+    if (!c.preg.peligro) return ['Pregunta si hay peligro', '[data-q="peligro"]'];
+    if (!esReal(p)) return ['Si no es una emergencia real, libera la línea', '.tel-colgar'];
+    if (p.tipo === 'oculta' && !c.preg.sino && S.nivel >= 3) return ['Si habla de forma extraña, usa la pregunta de sí o no', '[data-q="sino"]'];
+    if (inc && S.sel !== inc.id) return ['Toca el incidente de esta llamada en la cola', '#cola-inc tr.pend'];
+    if (inc && !inc.env.length) return S.selU.length ? ['Pulsa Despachar', '.enviar'] : ['Pulsa «Seleccionar recomendadas»', '.btn-recomendadas'];
+    if (p.ayuda && !c.ayuda) return ['Guía al llamante mientras llega la ayuda', '.btn.ayuda'];
+    return ['La ayuda va en camino. El llamante colgará solo', null];
+  }
+  if (S.cola.some(x => x.est === 'sonando')) return ['Contesta la línea que parpadea', '#telefonia .sonando'];
+  if (sel && faltanTipos(sel).length && conocido(sel) && esReal(PL[sel.pl])) return S.selU.length ? ['Pulsa Despachar', '.enviar'] : ['Faltan unidades: pulsa «Seleccionar recomendadas»', '.btn-recomendadas'];
+  if (S.inc.some(i => !i.env.length && esReal(PL[i.pl]))) return ['Hay incidentes pendientes: tócalos en la cola', '#cola-inc tr.pend'];
+  return ['Todo en orden. Espera la próxima llamada', null];
+}
+
+function pintarCola() {
+  const filas = S.inc.map(i => {
+    const pr = prioridad(i), tarde = i.est === 'abierto' && S.t - i.t0 > i.lim;
+    return `<tr class="${i.id === S.sel ? 'sel' : ''} ${tarde ? 'tarde' : ''} ${estadoInc(i)[1]}" data-a="sel-inc" data-id="${i.id}"><td class="mono">${String(i.id).padStart(4, '0')}</td><td><span class="prio ${pr}">${pr}</span></td>
+      <td>${conocido(i) ? `<span class="cod">${CODIGO[PL[i.pl].tipo]}</span> ${esc(etiqueta(i))}` : '<span class="falta">Sin clasificar</span>'}</td>
+      <td><span class="est-i ${estadoInc(i)[1]}">${estadoInc(i)[0]}</span></td><td class="mono">${mmss(S.t - i.t0)}</td></tr>`;
   }).join('');
-  const texto = inc.est === 'trabajo' ? ESCENA[p.tipo] || ESCENA.mixto : faltan.length ? 'Faltan unidades: ' + faltan.map(([t, k]) => `${TIPOS[t].ic}×${k}`).join(' ') : 'Las unidades van de camino.';
-  setHTML(el, `${cabeceraInc(inc)}
-    <div class="escena"><p>${esc(texto)}</p><div class="progreso"><i style="width:${Math.round(prog * 100)}%"></i></div></div>
-    <div class="lugar-lista">${filas}</div>
-    ${faltan.length ? '<button class="btn" data-a="tab" data-t="despacho">➕ Enviar refuerzos</button>' : ''}`);
+  setHTML($('#cola-inc'), `<div class="pane-cab">COLA DE INCIDENTES <span class="cab-der">${S.inc.length} abiertos</span></div>
+    <div class="tabla-caja"><table class="tabla"><thead><tr><th>Nº</th><th>P</th><th>Tipo</th><th>Estado</th><th>T</th></tr></thead><tbody>${filas || '<tr><td colspan="5" class="falta">Sin incidentes abiertos</td></tr>'}</tbody></table></div>`);
+}
+
+// Tablero de estado de unidades
+function pintarTablero() {
+  const inc = S.inc.find(i => i.id === S.sel);
+  const filas = S.unidades.map(u => {
+    const [e, cl] = EST_U[u.est], i = S.inc.find(x => x.id === u.inc);
+    const info = u.est === 'ruta' && i ? `${Math.round(eta(u, i.nodo))} s` : inc && disponible(u) ? `≈${Math.round(eta(u, inc.nodo))} s` : BASES[u.base].nombre;
+    return `<tr class="${S.selU.includes(u.id) ? 'sel' : ''} ${disponible(u) ? '' : 'ocupada'}" data-a="unidad" data-id="${u.id}"><td><span class="u-tipo" style="--c:${COLOR_SERV[u.tipo]}">${TIPOS[u.tipo].ic}</span><b>${u.id}</b></td>
+      <td><span class="est-u ${cl}">${e}</span></td><td class="mono">${i ? String(i.id).padStart(4, '0') : '—'}</td><td>${info}</td></tr>`;
+  }).join('');
+  setHTML($('#tablero'), `<div class="pane-cab">UNIDADES <span class="cab-der">${S.unidades.filter(disponible).length}/${S.unidades.length} disponibles</span></div>
+    <div class="tabla-caja"><table class="tabla"><thead><tr><th>Unidad</th><th>Estado</th><th>Inc.</th><th>${inc ? 'Llegada' : 'Base'}</th></tr></thead><tbody>${filas}</tbody></table></div>`);
+}
+
+function pintarRadio() {
+  const r = S.radio.slice(-4).reverse();
+  const canal = q => /^P-|Policía/.test(q) ? 'POL' : /^B-/.test(q) ? 'BOM' : /^A-|^H-/.test(q) ? 'SAN' : 'CEN';
+  setHTML($('#radio'), `<span class="tel-et">RADIO</span><div class="radio-log">${r.map((m, i) => `<div class="radio-l ${i ? '' : 'nueva'}"><span class="mono">${m.h}</span><span class="canal ${canal(m.quien)}">${canal(m.quien)}</span><b>${esc(m.quien)}:</b> ${esc(m.t)}</div>`).join('')}</div>`);
 }
 
 // ======================= Mapa con cámara (zoom y arrastre) =======================
@@ -663,12 +682,12 @@ const base = (c, r) => [M.ox + c * M.cX, M.oy + r * M.cY];
 const px = (c, r) => { const [x, y] = base(c, r); return [x * cam.z + cam.x, y * cam.z + cam.y]; };
 
 function ajustarMapa() {
-  const dpr = Math.min(2, devicePixelRatio || 1), w = innerWidth, h = innerHeight;
+  const caja = $('#mapa-caja'), dpr = Math.min(2, devicePixelRatio || 1), w = caja.clientWidth, h = caja.clientHeight;
+  if (!w || !h) return;
   cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
   cx.setTransform(dpr, 0, 0, dpr, 0, 0);
   M.w = w; M.h = h; M.dpr = dpr;
-  // Encaja el plano entre la barra superior y el muelle de llamadas
-  const arriba = 80, abajo = 110, lados = 40;
+  const arriba = 34, abajo = 44, lados = 30;
   M.cX = (w - lados * 2) / (COLS - 1); M.cY = (h - arriba - abajo) / (FILAS - 1);
   M.cX = Math.min(M.cX, M.cY * 1.45); M.cY = Math.min(M.cY, M.cX * 1.3);
   M.celda = Math.min(M.cX, M.cY);
@@ -678,7 +697,7 @@ function ajustarMapa() {
 
 function limitarCam() {
   cam.z = Math.max(1, Math.min(ZMAX, cam.z));
-  const [x0, y0] = base(-0.5, -0.5), [x1, y1] = base(COLS - 0.5, FILAS - 0.5);
+  const [x0, y0] = base(-1, -1), [x1, y1] = base(COLS, FILAS);
   const minX = M.w * 0.5 - x1 * cam.z, maxX = M.w * 0.5 - x0 * cam.z, minY = M.h * 0.5 - y1 * cam.z, maxY = M.h * 0.5 - y0 * cam.z;
   if (cam.z === 1) { cam.x = 0; cam.y = 0; } else { cam.x = Math.max(minX, Math.min(maxX, cam.x)); cam.y = Math.max(minY, Math.min(maxY, cam.y)); }
 }
@@ -690,55 +709,49 @@ function zoomEn(f, sx, sy) {
 function centrarEn(n, zMin = 1) {
   const z0 = cam.z;
   if (cam.z < zMin) { cam.z = zMin; cam.x = M.w / 2 - (M.w / 2 - cam.x) * cam.z / z0; cam.y = M.h / 2 - (M.h / 2 - cam.y) * cam.z / z0; limitarCam(); }
-  const [bx, by] = base(...cr(n)), visible = S?.panel ? M.w * 0.58 : M.w;
+  const [bx, by] = base(...posNodo(n)), visible = M.w;
   cam.objetivo = { x: visible / 2 - bx * cam.z, y: M.h / 2 - by * cam.z };
 }
 
-function pintarFondo() {
-  const f = M.fondo || document.createElement('canvas'); f.width = M.w * M.dpr; f.height = M.h * M.dpr;
-  const g = f.getContext('2d'); g.setTransform(M.dpr, 0, 0, M.dpr, 0, 0);
-  const z = cam.z, C = M.celda * z, cX = M.cX * z, cY = M.cY * z, calle = C * 0.2;
-  g.fillStyle = '#070c16'; g.fillRect(0, 0, M.w, M.h);
-  for (let r = 0; r < FILAS - 1; r++) for (let c = 0; c < COLS - 1; c++) {
-    if (r === 5) continue; // franja del río
-    const [x, y] = px(c, r);
-    if (x > M.w || y > M.h || x + cX < 0 || y + cY < 0) continue;
-    const zn = distritoDe(c + (c >= 9 ? 1 : 0), r + (r >= 5 ? 1 : 0)), abierto = N().zonas.includes(zn);
-    const bw = cX - calle, bh = cY - calle;
-    g.fillStyle = abierto ? DISTRITOS[zn].color : '#0a0f19';
-    redondo(g, x + calle / 2, y + calle / 2, bw, bh, C * 0.08); g.fill();
-    if (abierto) {
-      g.fillStyle = 'rgba(255,255,255,0.04)';
-      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if ((c * 7 + r * 3 + i + j) % 3) g.fillRect(x + calle / 2 + 4 + i * (bw - 8) / 3, y + calle / 2 + 4 + j * (bh - 8) / 3, (bw - 8) / 3 - 3, (bh - 8) / 3 - 3);
-    } else {
-      g.save(); g.beginPath(); g.rect(x + calle / 2, y + calle / 2, bw, bh); g.clip(); g.strokeStyle = 'rgba(255,255,255,0.04)'; g.lineWidth = 1;
-      for (let k = -bh; k < bw; k += 7) { g.beginPath(); g.moveTo(x + calle / 2 + k, y + calle / 2); g.lineTo(x + calle / 2 + k + bh, y + calle / 2 + bh); g.stroke(); }
-      g.restore();
-    }
-  }
-  const [, ry] = px(0, 5), [rx0] = px(-1, 5), [rx1] = px(COLS, 5);
-  const grad = g.createLinearGradient(0, ry, 0, ry + cY); grad.addColorStop(0, '#0d2a4a'); grad.addColorStop(0.5, '#123a63'); grad.addColorStop(1, '#0d2a4a');
-  g.fillStyle = grad; g.fillRect(rx0, ry + calle / 2, rx1 - rx0, cY - calle);
-  g.lineCap = 'round';
+// Capas que cambian con el nivel: barrios fuera de servicio y rótulos (se dibujan encima del mapa base)
+function dibujarBase() {
+  if (!MAPA.lienzo) generarBase();
+  const { MARGEN } = MAPA, [x0, y0] = px(-MARGEN, -MARGEN), [x1, y1] = px(COLS - 1 + MARGEN, FILAS - 1 + MARGEN);
+  cx.fillStyle = '#0d2a47'; cx.fillRect(0, 0, M.w, M.h);
+  cx.imageSmoothingQuality = 'high'; cx.drawImage(MAPA.lienzo, x0, y0, x1 - x0, y1 - y0);
+  // Barrios cerrados en este turno: oscurecidos
+  cx.fillStyle = 'rgba(4,7,13,0.72)';
+  for (const m of MANZANAS) if (!N().zonas.includes(m.zona)) { cx.beginPath(); m.esq.forEach((p, i) => cx[i ? 'lineTo' : 'moveTo'](...px(...p))); cx.closePath(); cx.fill(); }
+}
+
+function rotulo(t, x, y, tam, color = '#cdd7e8', ang = 0, peso = 500) {
+  cx.save(); cx.translate(x, y); cx.rotate(ang); cx.font = `${peso} ${tam}px Barlow, system-ui`;
+  cx.lineJoin = 'round'; cx.strokeStyle = 'rgba(8,12,20,0.9)'; cx.lineWidth = 3.5; cx.strokeText(t, 0, 0); cx.fillStyle = color; cx.fillText(t, 0, 0); cx.restore();
+}
+
+function dibujarRotulos() {
+  const z = cam.z, C = M.celda * z;
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  // Nombres de calles siguiendo su dirección; con poco zoom, solo las principales
+  const vistos = new Set();
   for (const [a, b] of ARISTAS) {
-    const [x1, y1] = px(...cr(a)), [x2, y2] = px(...cr(b));
-    g.strokeStyle = '#273246'; g.lineWidth = calle; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
-    g.strokeStyle = 'rgba(255,214,120,0.09)'; g.lineWidth = 1; g.setLineDash([4, 6]); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]);
+    const prin = esPrincipal(a, b), [ca, ra] = cr(a), [cb] = cr(b), horiz = ca !== cb;
+    const nombre = horiz ? CALLES[ra] : AVENIDAS[ca];
+    if (!zonaOk(a) || !zonaOk(b) || (z < 1.5 && !prin)) continue;
+    const idx = horiz ? ca : ra, cada = z >= 2.2 ? 2 : 4;
+    if ((idx + (horiz ? ra : ca)) % cada || vistos.has(nombre + idx)) continue;
+    vistos.add(nombre + idx);
+    const [x1, y1] = px(...posNodo(a)), [x2, y2] = px(...posNodo(b));
+    let ang = Math.atan2(y2 - y1, x2 - x1); if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
+    rotulo(nombre, (x1 + x2) / 2, (y1 + y2) / 2, Math.max(10, Math.min(14, C * 0.13)), prin ? '#e6d6a8' : '#cdd7e8', ang);
   }
-  // Nombres de calles: con zoom se repiten a lo largo de la calle para encontrarlas fácilmente
-  g.fillStyle = 'rgba(190,205,230,0.5)'; g.font = `500 ${Math.max(10, Math.min(15, C * 0.12))}px Barlow, system-ui`; g.textBaseline = 'middle'; g.textAlign = 'center';
-  const paso = z > 1.8 ? 3 : 6;
-  CALLES.forEach((n, r) => { for (let c = 0.5; c < COLS - 1; c += paso) { const [x, y] = px(c + (r % 2) * 1.5, r); g.fillText(n, x, y - calle * 0.9); } });
-  AVENIDAS.forEach((n, c) => { for (let r = 0.5; r < FILAS - 1; r += paso / 1.5) { const [x, y] = px(c, r + (c % 2 ? 1 : 0)); g.save(); g.translate(x + calle * 0.9, y); g.rotate(-Math.PI / 2); g.fillText(n, 0, 0); g.restore(); } });
-  g.font = `700 ${C * 0.42}px 'Barlow Condensed', system-ui`; g.fillStyle = 'rgba(255,255,255,0.05)';
+  // Agua y barrios
+  rotulo('Río Clara', ...px(2.6, rioY(2.6)), Math.max(11, C * 0.14), '#7fb2e0', 0, 600);
+  rotulo('Mar Mediterráneo', ...px(5.5, 8.05), Math.max(12, C * 0.18), '#6fa0cf', 0, 600);
   [['centro', 5.5, 3.5], ['norte', 5.5, 0.5], ['poligono', 10.5, 2.5], ['puerto', 6, 6.5], ['bosque', 0.5, 3]].forEach(([zn, c, r]) => {
-    const [x, y] = px(c, r);
-    if (N().zonas.includes(zn)) g.fillText(DISTRITOS[zn].nombre, x, y);
-    else { g.save(); g.font = `600 ${C * 0.2}px 'Barlow Condensed', system-ui`; g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillText('🔒 ' + DISTRITOS[zn].nombre, x, y); g.restore(); }
+    const [x, y] = px(c, r), abierta = N().zonas.includes(zn);
+    rotulo((abierta ? '' : '🔒 ') + DISTRITOS[zn].nombre.toUpperCase(), x, y, Math.max(12, C * (abierta ? 0.2 : 0.17)), abierta ? 'rgba(220,230,245,0.35)' : 'rgba(220,230,245,0.55)', 0, 700);
   });
-  const v = g.createRadialGradient(M.w / 2, M.h / 2, Math.min(M.w, M.h) * 0.4, M.w / 2, M.h / 2, Math.max(M.w, M.h) * 0.75);
-  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = v; g.fillRect(0, 0, M.w, M.h);
-  M.fondo = f;
 }
 
 function redondo(g, x, y, w, h, r) { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); }
@@ -768,26 +781,26 @@ function dibujarMapa(dt) {
     cam.x += (cam.objetivo.x - cam.x) * k; cam.y += (cam.objetivo.y - cam.y) * k; limitarCam();
     if (Math.abs(cam.objetivo.x - cam.x) < 0.5 && Math.abs(cam.objetivo.y - cam.y) < 0.5) cam.objetivo = null;
   }
-  const claveF = [cam.z, cam.x, cam.y, M.w, M.h, N().zonas].join();
-  if (claveF !== M.clave) { pintarFondo(); M.clave = claveF; }
   const z = cam.z, C = M.celda * z, K = M.celda * (0.7 + 0.2 * z), ahora = performance.now() / 1000;
-  cx.clearRect(0, 0, M.w, M.h); cx.drawImage(M.fondo, 0, 0, M.w, M.h);
+  dibujarBase();
   for (const [k, v] of Object.entries(S.cortes)) {
-    const [a, b] = k.split('-').map(Number), [x1, y1] = px(...cr(a)), [x2, y2] = px(...cr(b));
-    cx.strokeStyle = v.tipo === 'agua' ? `rgba(56,152,255,${0.55 + 0.15 * Math.sin(ahora * 3)})` : v.tipo === 'gente' ? 'rgba(255,150,40,0.35)' : 'rgba(255,120,30,0.6)';
-    cx.lineWidth = C * 0.16; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+    const [a, b] = k.split('-').map(Number), [x1, y1] = px(...posNodo(a)), [x2, y2] = px(...posNodo(b));
+    // Inundada: azul; atasco: rojo discontinuo; gente de fiestas: violeta discontinuo
+    cx.strokeStyle = v.tipo === 'agua' ? `rgba(56,152,255,${0.6 + 0.15 * Math.sin(ahora * 3)})` : v.tipo === 'gente' ? 'rgba(200,120,255,0.55)' : 'rgba(255,70,70,0.75)';
+    cx.lineWidth = C * (v.tipo === 'agua' ? 0.12 : 0.06); cx.lineCap = 'butt'; cx.setLineDash(v.tipo === 'agua' ? [] : [C * 0.08, C * 0.06]);
+    cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke(); cx.setLineDash([]);
   }
-  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  dibujarRotulos();
+  // Puntos de interés: chincheta circular con icono y nombre
   for (const l of LUGARES) {
     if (!zonaOk(nodo(l.c, l.r))) continue;
-    const [x, y] = px(l.c, l.r);
-    cx.font = `${K * 0.26}px system-ui`; cx.globalAlpha = 0.9; cx.fillStyle = '#fff'; cx.fillText(l.ic, x + C * 0.3, y - C * 0.3);
-    cx.font = `500 ${Math.max(10, K * 0.12)}px Barlow, system-ui`; const w = cx.measureText(l.nombre).width + 8, ly = y - C * 0.3 + K * 0.2;
-    cx.fillStyle = 'rgba(7,12,22,0.75)'; redondo(cx, x + C * 0.3 - w / 2, ly - K * 0.08, w, K * 0.16, 4); cx.fill();
-    cx.fillStyle = 'rgba(225,233,246,0.8)'; cx.fillText(l.nombre, x + C * 0.3, ly); cx.globalAlpha = 1;
+    const [nx, ny] = posNodo(nodo(l.c, l.r)), [x, y] = px(nx + 0.3, ny - 0.3), r = Math.max(9, K * 0.13);
+    cx.fillStyle = 'rgba(240,244,250,0.92)'; cx.beginPath(); cx.arc(x, y, r, 0, 7); cx.fill();
+    cx.font = `${r * 1.15}px system-ui`; cx.fillStyle = '#000'; cx.fillText(l.ic, x, y + 1);
+    rotulo(l.nombre, x, y + r + 9, Math.max(10, K * 0.12), '#f0f4fa', 0, 600);
   }
   for (const k of new Set(S.unidades.map(u => u.base))) {
-    const b = BASES[k], [x, y] = px(b.c, b.r), r = K * 0.3;
+    const b = BASES[k], [x, y] = px(...posNodo(nodo(b.c, b.r))), r = K * 0.3;
     cx.fillStyle = 'rgba(255,255,255,0.12)'; redondo(cx, x - r, y - r, r * 2, r * 2, r * 0.4); cx.fill();
     cx.strokeStyle = 'rgba(255,255,255,0.25)'; cx.lineWidth = 1.5; cx.stroke();
     cx.font = `${r * 1.1}px system-ui`; cx.fillStyle = '#fff'; cx.fillText(b.ic, x, y + 1);
@@ -801,14 +814,14 @@ function dibujarMapa(dt) {
   cx.setLineDash([6, 6]); cx.lineDashOffset = -ahora * 20; cx.lineWidth = 2.5;
   for (const u of S.unidades) {
     if (!u.ruta.length || u.inc !== S.sel || !S.sel) continue;
-    cx.strokeStyle = COLOR_SERV[u.tipo]; cx.beginPath(); cx.moveTo(...px(u.x, u.y)); u.ruta.forEach(n => cx.lineTo(...px(...cr(n)))); cx.stroke();
+    cx.strokeStyle = COLOR_SERV[u.tipo]; cx.beginPath(); cx.moveTo(...px(u.x, u.y)); u.ruta.forEach(n => cx.lineTo(...px(...posNodo(n)))); cx.stroke();
   }
   cx.setLineDash([]);
   // Avisos
   const porNodo = {};
   for (const inc of S.inc) {
     const k = porNodo[inc.nodo] = (porNodo[inc.nodo] || 0) + 1;
-    const [bx, by] = px(...cr(inc.nodo)), x = bx + (k - 1) * K * 0.42;
+    const [bx, by] = px(...posNodo(inc.nodo)), x = bx + (k - 1) * K * 0.42;
     const p = PL[inc.pl], c = S.cola.find(cc => cc.inc === inc.id), conocido = !c || c.preg.que;
     const estado = inc.est === 'trabajo' ? 'trabajo' : S.t - inc.t0 > inc.lim ? 'tarde' : 'abierto';
     const frac = inc.est === 'trabajo' ? 1 - (inc.fin - S.t) / (p.trabajo || 6 + 4 * p.grav) : Math.max(0, 1 - (S.t - inc.t0) / inc.lim);
@@ -818,6 +831,14 @@ function dibujarMapa(dt) {
       cx.font = `600 ${Math.max(11, K * 0.13)}px Barlow, system-ui`; const t = `#${inc.id} ${conocido ? p.et : 'Sin clasificar'}`, w = cx.measureText(t).width + 12;
       cx.fillStyle = 'rgba(8,13,24,0.85)'; redondo(cx, x - w / 2, by + 6, w, K * 0.2, 6); cx.fill(); cx.fillStyle = '#e8eef8'; cx.fillText(t, x, by + 6 + K * 0.1);
     }
+  }
+  // Zona aproximada de la llamada en curso mientras no se confirma la dirección
+  const ca = activa();
+  if (ca && !ca.inc) {
+    const [nx, ny] = posNodo(ca.nodo), [x, y] = px(nx + ((ca.id * 7) % 5 - 2) * 0.15, ny + ((ca.id * 3) % 5 - 2) * 0.15), r = C * 1.3;
+    cx.fillStyle = 'rgba(255,181,71,0.08)'; cx.strokeStyle = 'rgba(255,181,71,0.7)'; cx.setLineDash([8, 6]); cx.lineWidth = 2;
+    cx.beginPath(); cx.arc(x, y, r * (1 + 0.04 * Math.sin(ahora * 3)), 0, 7); cx.fill(); cx.stroke(); cx.setLineDash([]);
+    cx.font = `600 ${Math.max(11, K * 0.12)}px Barlow, system-ui`; cx.fillStyle = '#ffb547'; cx.fillText('Ubicación aproximada de la llamada', x, y - r - 10);
   }
   // Unidades: las libres esperan en su base, en corro
   const enBase = {};
@@ -866,11 +887,12 @@ function dibujarMapa(dt) {
 // Gestos: tocar selecciona, arrastrar mueve, pellizcar o doble toque amplía
 const toques = new Map();
 let gesto = null, ultimoTap = { t: 0, x: 0, y: 0 };
+const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
 cv.addEventListener('pointerdown', e => {
   if (!S) return;
-  cv.setPointerCapture(e.pointerId); toques.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const q = pos(e); cv.setPointerCapture(e.pointerId); toques.set(e.pointerId, q);
   cam.objetivo = null;
-  if (toques.size === 1) gesto = { tipo: 'tap', x0: e.clientX, y0: e.clientY, cx0: cam.x, cy0: cam.y };
+  if (toques.size === 1) gesto = { tipo: 'tap', x0: q.x, y0: q.y, cx0: cam.x, cy0: cam.y };
   else if (toques.size === 2) {
     const [a, b] = [...toques.values()];
     gesto = { tipo: 'pinza', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: cam.z, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, cx0: cam.x, cy0: cam.y };
@@ -878,13 +900,13 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => {
   if (!toques.has(e.pointerId) || !gesto) return;
-  toques.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const q = pos(e); toques.set(e.pointerId, q);
   if (gesto.tipo === 'pinza' && toques.size === 2) {
     const [a, b] = [...toques.values()], d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const z = Math.max(1, Math.min(ZMAX, gesto.z0 * d / gesto.d0));
     cam.z = z; cam.x = mx - (gesto.mx - gesto.cx0) * z / gesto.z0; cam.y = my - (gesto.my - gesto.cy0) * z / gesto.z0; limitarCam();
   } else if (gesto.tipo === 'tap' || gesto.tipo === 'arrastre') {
-    const dx = e.clientX - gesto.x0, dy = e.clientY - gesto.y0;
+    const dx = q.x - gesto.x0, dy = q.y - gesto.y0;
     if (gesto.tipo === 'tap' && Math.hypot(dx, dy) > 10) gesto.tipo = 'arrastre';
     if (gesto.tipo === 'arrastre') { cam.x = gesto.cx0 + dx; cam.y = gesto.cy0 + dy; limitarCam(); }
   }
@@ -893,7 +915,7 @@ function finToque(e) {
   if (!toques.has(e.pointerId)) return;
   toques.delete(e.pointerId);
   if (gesto?.tipo === 'tap' && !toques.size) {
-    const x = e.clientX, y = e.clientY, ahora = performance.now();
+    const { x, y } = pos(e), ahora = performance.now();
     if (ahora - ultimoTap.t < 320 && Math.hypot(x - ultimoTap.x, y - ultimoTap.y) < 40) { zoomEn(1.7, x, y); ultimoTap.t = 0; }
     else { ultimoTap = { t: ahora, x, y }; tocarMapa(x, y); }
   }
@@ -901,7 +923,7 @@ function finToque(e) {
 }
 cv.addEventListener('pointerup', finToque);
 cv.addEventListener('pointercancel', finToque);
-cv.addEventListener('wheel', e => { e.preventDefault(); zoomEn(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY); }, { passive: false });
+cv.addEventListener('wheel', e => { e.preventDefault(); const q = pos(e); zoomEn(e.deltaY < 0 ? 1.15 : 1 / 1.15, q.x, q.y); }, { passive: false });
 
 function tocarMapa(x, y) {
   const K = M.celda * (0.7 + 0.2 * cam.z);
@@ -915,11 +937,34 @@ function tocarMapa(x, y) {
 function seleccionar(id) {
   const inc = S.inc.find(i => i.id === id); if (!inc) return;
   if (S.sel !== id) S.selU = [];
-  S.sel = id; S.panel = true;
-  if (!(activa()?.inc === id && S.tab === 'llamada')) S.tab = inc.env.length ? 'lugar' : 'despacho';
+  S.sel = id;
   Sonido.play('tecla'); ui(); centrarEn(inc.nodo);
 }
 function destello() { const d = $('#destello'); d.classList.remove('on'); void d.offsetWidth; d.classList.add('on'); }
+
+// ======================= Hablar con el llamante =======================
+// Mantener pulsado el micrófono: lo dicho se interpreta como una de las preguntas o acciones disponibles
+function procesarVoz(alternativas) {
+  const c = activa(); if (!c || c.pend || c.fin) return;
+  const p = plDe(c), opciones = ['que', 'donde', 'heridos', 'peligro', 'respira', 'calma', 'colgar', ...(S.nivel >= 3 ? ['sino'] : []),
+    ...(c.preg.que ? c.extra.map(k => 'x:' + k) : []), ...(p.ayuda && c.preg.que && !c.ayuda && c.pan === 0 ? ['ayuda'] : [])];
+  const { intencion, texto } = Escucha.interpretar(alternativas, opciones);
+  const dicho = texto.charAt(0).toUpperCase() + texto.slice(1);
+  if (intencion === 'ayuda') { c.log.push({ yo: 1, t: dicho }); return abrirAyuda(); }
+  if (intencion === 'colgar') return colgar(false);
+  if (intencion) return preguntar(intencion, dicho);
+  c.log.push({ yo: 1, t: dicho });
+  responder(c, lang(c) === 'en' ? azar(["Sorry? I didn't understand.", 'What? Can you repeat that?']) : azar(['¿Perdone? No le he entendido.', '¿Cómo? ¿Puede repetirlo?', 'No le oigo bien... ¿qué me dice?']), null);
+  ui();
+}
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('[data-hablar]') || !activa()) return;
+  e.preventDefault(); Sonido.callar();
+  Escucha.empezar(lang(activa()) === 'en' ? 'en-US' : 'es-ES', procesarVoz, () => ui());
+  ui();
+});
+addEventListener('pointerup', () => Escucha.activa && Escucha.parar());
+addEventListener('pointercancel', () => Escucha.activa && Escucha.parar());
 
 // ======================= Minijuegos =======================
 function abrirCapa(html, clase = '') {
@@ -1114,8 +1159,8 @@ function entrarJuego() {
   cerrarCapa();
   $('#menu').hidden = true; $('#juego').hidden = false;
   Sonido.iniciar(); Sonido.ambienteOn(true); Sonido.linea(!!activa()); pantallaCompleta();
-  S.panel ??= false; cam.z = 1; cam.x = 0; cam.y = 0; cam.objetivo = null;
-  M.clave = ''; ajustarMapa(); ui();
+  cam.z = 1; cam.x = 0; cam.y = 0; cam.objetivo = null;
+  ajustarMapa(); ui();
 }
 function salirAlMenu() {
   guardar(); S = null; Sonido.ambienteOn(false); Sonido.linea(false); Sonido.callar(); cerrarCapa();
@@ -1143,9 +1188,7 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); instalador = 
 // ======================= Acciones (delegación de toques) =======================
 const ACCIONES = {
   atender: d => atender(+d.id), preguntar: d => preguntar(d.q), colgar: () => colgar(false), 'colgar-ya': () => colgar(true),
-  unidad: d => toggleUnidad(d.id), enviar, retirar: d => retirar(d.id), 'sel-inc': d => { $('#lista-avisos').hidden = true; seleccionar(+d.id); }, ayuda: abrirAyuda,
-  tab: d => { S.tab = d.t; S.panel = true; ui(); }, 'cerrar-panel': () => { S.panel = false; S.sel = null; S.selU = []; ui(); },
-  avisos: () => { $('#lista-avisos').hidden = !$('#lista-avisos').hidden; ui(); },
+  unidad: d => toggleUnidad(d.id), enviar, retirar: d => retirar(d.id), 'sel-inc': d => seleccionar(+d.id), ayuda: abrirAyuda, recomendadas: seleccionarRecomendadas,
   'zoom-mas': () => zoomEn(1.4, M.w / 2, M.h / 2), 'zoom-menos': () => zoomEn(1 / 1.4, M.w / 2, M.h / 2), 'zoom-ver': () => { cam.z = 1; cam.objetivo = null; limitarCam(); },
   paso: d => elegirPaso(+d.k), rcp: toqueRCP,
   deduce: d => { S.flags.faro = d.l === 'Faro'; S.pausado = false; cerrarCapa(); radio(`Patrulla secreta apostada en: ${d.l}.`, 'Policía'); },
@@ -1172,8 +1215,7 @@ document.addEventListener('pointerdown', e => {
   b.classList.add('pulsado'); setTimeout(() => b.classList.remove('pulsado'), 150);
   ACCIONES[b.dataset.a]?.(b.dataset);
 });
-addEventListener('resize', () => { if (S) ajustarMapa(); });
-document.fonts?.ready.then(() => { M.clave = ''; });
+new ResizeObserver(() => { if (S) ajustarMapa(); }).observe($('#mapa-caja'));
 
 // ======================= Arranque =======================
 const esTablet = () => PRUEBA || (matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) >= 600);

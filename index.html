@@ -41,21 +41,42 @@
     </div>
   </section>
 
-  <!-- Juego: el mapa ocupa toda la pantalla y el resto flota encima -->
+  <!-- Juego: puesto de operador con el sistema de despacho (CAD) -->
   <section id="juego" class="pantalla" hidden>
-    <canvas id="mapa"></canvas>
-    <div id="destello"></div>
-    <header id="hud">
-      <div class="hud-nivel"><span id="hud-num"></span><b id="hud-titulo"></b></div>
-      <div class="hud-centro"><span id="hud-reloj">08:00</span><div class="hud-progreso"><i id="hud-barra"></i></div></div>
-      <div class="hud-der"><span id="hud-puntos">0</span><button class="btn-ic" data-a="sonido" id="btn-sonido">🔊</button><button class="btn-ic" data-a="pausa" aria-label="Pausa">⏸</button></div>
+    <header id="barra">
+      <div class="barra-sis"><span class="logo-cad">CAD</span><b>Central 911 Villaclara</b><span class="sep"></span><span>Posición 04</span><span class="sep"></span><span id="hud-num"></span><b id="hud-titulo"></b></div>
+      <div id="pista" class="pista" role="status"></div>
+      <div class="barra-der"><span class="hud-progreso"><i id="hud-barra"></i></span><span id="hud-reloj">08:00</span><span id="hud-puntos">0</span>
+        <button class="btn-ic" data-a="sonido" id="btn-sonido">🔊</button><button class="btn-ic" data-a="pausa" aria-label="Pausa">⏸</button></div>
     </header>
-    <div id="radio"></div>
-    <div id="zoom"><button data-a="zoom-mas" aria-label="Acercar">+</button><button data-a="zoom-menos" aria-label="Alejar">−</button><button data-a="zoom-ver" aria-label="Ver toda la ciudad">⤢</button></div>
-    <div id="dock"></div>
-    <button id="btn-avisos" data-a="avisos">🚨 Avisos <b id="n-avisos">0</b></button>
-    <div id="lista-avisos" hidden></div>
-    <aside id="panel" hidden><nav id="panel-tabs"></nav><div id="panel-cuerpo"></div></aside>
+
+    <!-- Columna izquierda: datos del llamante y entrevista -->
+    <section id="col-llamada" class="col">
+      <div class="pane" id="ali"></div>
+      <div class="pane llena" id="entrevista"></div>
+    </section>
+
+    <!-- Centro: mapa GIS y ficha del incidente seleccionado -->
+    <section id="col-centro" class="col">
+      <div class="pane llena mapa-pane">
+        <div class="pane-cab">MAPA <span class="cab-nota">Pellizca para ampliar, arrastra para moverte</span>
+          <span class="zoom"><button data-a="zoom-menos" aria-label="Alejar">−</button><button data-a="zoom-mas" aria-label="Acercar">+</button><button data-a="zoom-ver" aria-label="Ver toda la ciudad">⤢</button></span></div>
+        <div id="mapa-caja"><canvas id="mapa"></canvas><div id="destello"></div></div>
+      </div>
+      <div class="pane" id="ficha"></div>
+    </section>
+
+    <!-- Derecha: cola de incidentes y estado de unidades -->
+    <section id="col-der" class="col">
+      <div class="pane" id="cola-inc"></div>
+      <div class="pane llena" id="tablero"></div>
+    </section>
+
+    <!-- Abajo: telefonía y radio -->
+    <footer id="consola">
+      <div id="telefonia"></div>
+      <div id="radio"></div>
+    </footer>
   </section>
 
   <!-- Capas modales -->
@@ -65,6 +86,8 @@
   <script src="js/escenarios.js"></script>
   <script src="js/sonido.js"></script>
   <script src="js/voz.js"></script>
+  <script src="js/escucha.js"></script>
+  <script src="js/mapa.js"></script>
   <script src="js/juego.js"></script>
 </body>
 </html>
