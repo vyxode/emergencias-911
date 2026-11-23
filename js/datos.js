@@ -47,15 +47,74 @@ const TIPOS = {
 };
 
 // ---------- Preguntas del operador ----------
+// El botón muestra la primera frase; en la conversación el operador usa cualquiera de las variantes.
 const PREGUNTAS = {
-  que: { es: '¿Qué ha pasado exactamente?', en: 'What happened exactly?' },
-  donde: { es: '¿Dónde se encuentra exactamente?', en: 'Where are you exactly?' },
-  heridos: { es: '¿Hay alguien herido?', en: 'Is anyone injured?' },
-  peligro: { es: '¿Hay armas, fuego o algún peligro?', en: 'Are there weapons, fire or any danger?' },
-  respira: { es: '¿La persona respira y está consciente?', en: 'Is the person breathing and conscious?' },
-  calma: { es: 'Respire hondo. La ayuda va en camino.', en: 'Take a deep breath. Help is on the way.' },
-  sino: { es: '¿Está en peligro? Responda solo sí o no.', en: 'Are you in danger? Just say yes or no.' },
+  que: { es: ['¿Qué ha pasado exactamente?', 'Cuénteme qué está ocurriendo.', 'Dígame qué ha pasado, con calma.'], en: ['What happened exactly?', 'Tell me what is going on.'] },
+  donde: { es: ['¿Dónde se encuentra exactamente?', '¿Me dice la dirección exacta?', '¿En qué calle está?'], en: ['Where are you exactly?', "What's the exact address?"] },
+  heridos: { es: ['¿Hay alguien herido?', '¿Hay heridos?', '¿Alguien necesita atención médica?'], en: ['Is anyone injured?', 'Is anybody hurt?'] },
+  peligro: { es: ['¿Hay armas, fuego o algún peligro?', '¿Hay algún peligro en la zona?', '¿Ve armas, fuego o algo peligroso?'], en: ['Are there weapons, fire or any danger?', 'Is there any danger around you?'] },
+  respira: { es: ['¿La persona respira y está consciente?', '¿Respira? ¿Le responde?'], en: ['Is the person breathing and conscious?', 'Is the person breathing? Do they respond?'] },
+  calma: { es: ['Respire hondo. La ayuda va en camino.', 'Tranquilo, estoy con usted. Respire despacio.', 'Escúcheme: le vamos a ayudar. Respire.'], en: ['Take a deep breath. Help is on the way.', "Stay with me. Breathe slowly, we're helping you."] },
+  sino: { es: ['¿Está en peligro? Responda solo sí o no.', 'Si no puede hablar, conteste sí o no: ¿está en peligro?'], en: ['Are you in danger? Just say yes or no.'] },
 };
+
+// Preguntas de seguimiento según el tipo de emergencia. Dan información extra para la ficha y unos puntos.
+// Cada respuesta se arma al azar con las piezas, así cambia en cada llamada.
+const SEGUIMIENTO = {
+  policia: [
+    ['sosp', '¿Puede describir al sospechoso?', 'Can you describe the suspect?', [
+      ['Un hombre de unos', ['20', '30', '40'], 'años,', ['con sudadera negra', 'con chaqueta roja', 'con gorra y gafas de sol', 'con chándal gris'], ['y barba.', 'muy delgado.', 'alto, de casi dos metros.', 'con un tatuaje en el cuello.']],
+      ['Una mujer joven,', ['rubia,', 'morena,', 'pelirroja,'], ['con abrigo largo.', 'con mochila azul.', 'en bicicleta.']]],
+      [['A man around', ['20', '30', '40'], ['in a black hoodie.', 'wearing a red jacket.', 'with a cap and sunglasses.']]]],
+    ['huida', '¿Hacia dónde ha ido?', 'Which way did they go?', [
+      ['Se ha ido corriendo hacia', '@calle', '.'], ['Se ha subido a un coche', ['blanco', 'negro', 'rojo'], 'y ha tirado por', '@calle', '.'], ['Sigue aquí, le estoy viendo ahora mismo.']],
+      [['They ran towards', '@calle', '.'], ['They are still here, I can see them.']]],
+  ],
+  medico: [
+    ['edad', '¿Qué edad tiene el paciente?', 'How old is the patient?', [['Tiene', ['8', '15', '34', '52', '67', '81'], 'años.']], [['', ['8', '34', '67'], 'years old.']]],
+    ['medic', '¿Tiene alguna enfermedad o toma medicación?', 'Any illness or medication?', [
+      [['Es diabético.', 'Toma pastillas para la tensión.', 'Tiene asma.', 'Que yo sepa, no.', 'Tuvo un infarto hace dos años.', 'Toma Sintrom, para la sangre.']]],
+      [[['He has diabetes.', 'Not that I know.', 'She has asthma.']]]],
+  ],
+  fuego: [
+    ['dentro', '¿Queda alguien dentro?', 'Is anyone still inside?', [[['No, hemos salido todos.', 'Creo que mi vecino del tercero sigue dentro.', 'No lo sé, no he visto salir a la señora del primero.', 'Solo el perro... está en la terraza.']]],
+      [[['No, everyone is out.', 'I think my neighbour is still inside.']]]],
+    ['humo', '¿De qué color es el humo?', 'What colour is the smoke?', [['Es', ['negro y muy espeso.', 'gris, sale mucho.', 'blanco, pero huele fatal.']]], [['It is', ['black and thick.', 'grey.']]]],
+  ],
+  trafico: [
+    ['vehic', '¿Cuántos vehículos hay implicados?', 'How many vehicles are involved?', [[['Dos coches.', 'Un coche y una moto.', 'Tres coches, uno ha volcado.', 'Una furgoneta y un coche.']]], [[['Two cars.', 'A car and a motorbike.']]]],
+    ['via', '¿La calzada está cortada?', 'Is the road blocked?', [[['Sí, no se puede pasar.', 'Un carril está libre.', 'Los coches pasan por la acera, es un caos.']]], [[['Yes, completely.', 'One lane is free.']]]],
+  ],
+  rescate: [
+    ['ver', '¿Puede verle ahora mismo?', 'Can you see them right now?', [[['Sí, sigue agarrado, pero está agotado.', 'Lo veo a ratos, las olas lo tapan.', 'Sí, les veo desde aquí. Hacen señales.']]], [[['Yes, but he is exhausted.', 'Sometimes, the waves hide him.']]]],
+    ['agua', '¿Cómo está el agua o el terreno?', 'How is the water or ground?', [[['La corriente es muy fuerte.', 'Hay mucho barro y sigue subiendo.', 'Hay rocas y mucho oleaje.']]], [[['The current is very strong.', 'Big waves and rocks.']]]],
+  ],
+};
+SEGUIMIENTO.mixto = [SEGUIMIENTO.policia[0], SEGUIMIENTO.medico[0]];
+SEGUIMIENTO.oculta = [SEGUIMIENTO.policia[0]];
+SEGUIMIENTO.falsa = [['sosp', '¿Puede darme más detalles?', 'Can you give me more details?', [[['¡Es verde y tiene alas! Jajaja.', '¿Detalles? Pues... es muy grande. (risas)', 'Ehhh... sí... es que... ¡JAJAJA!']]], [[['It is very... big. Hahaha.']]]]];
+SEGUIMIENTO.noemerg = [['detalle', '¿Hay alguien en peligro?', 'Is anyone in danger?', [[['No, no, peligro no. Pero es muy molesto.', 'Hombre, peligro peligro... no.']]], [[['No, not really.']]]]];
+
+// Cómo terminan las llamadas
+const DESPEDIDAS = {
+  es: ['¡Gracias! Ya oigo las sirenas.', 'Vale, les espero aquí. Muchas gracias.', 'Ya llegan... gracias, de verdad.', 'Gracias. Cuelgo para dejar la línea libre.', 'Vale, vale. Les espero en la puerta.'],
+  en: ['Thank you! I can hear the sirens.', "Okay, we'll wait here. Thanks so much.", 'They are coming... thank you.'],
+  operador: { es: ['La ayuda va de camino. Si algo cambia, vuelva a llamar.', 'Las unidades están en camino. Quédese en un lugar seguro.', 'Ya van hacia allí. Llámenos si la situación cambia.'], en: ['Help is on the way. Call us again if anything changes.'] },
+  broma: { es: ['¡JAJAJAJA! ¡Picaste! (cuelga)', 'Jajaja... ¡adiós, agente! (cuelga)', '(se oyen risas y cuelgan)'], en: ['Hahaha! Gotcha! (hangs up)'] },
+  noemerg: { es: ['Bueno, pues nada... ya llamaré a otro sitio. Adiós.', 'Vale, vale... perdone las molestias.'], en: ['Oh... okay. Sorry. Bye.'] },
+  oculta: { es: ['(susurra) Gracias... gracias.', '(susurra) Vale. Les espero.'], en: ['(whispers) Thank you...'] },
+};
+
+// Modo libre: condiciones que pueden aparecer y desaparecer durante el turno
+const CONDICIONES = {
+  tormenta: ['Entra un temporal de lluvia: habrá calles inundadas.', 'Deja de llover. Las calles se van secando.'],
+  fiesta: ['Empiezan unas fiestas en el Centro: mucha gente y tráfico lento.', 'Terminan las fiestas. El Centro vuelve a la normalidad.'],
+  ingles: ['Llega un crucero lleno de turistas: habrá llamadas en inglés.', 'El crucero zarpa. Menos turistas en la ciudad.'],
+  calor: ['Ola de calor: más golpes de calor y riesgo de incendios.', 'Bajan las temperaturas.'],
+  apagon: ['¡Apagón! El mapa se queda a oscuras.', 'Vuelve la luz.'],
+};
+// Grandes emergencias que pueden surgir en el modo libre
+const GRANDES = ['colegio_incendio', 'autobus_paso', 'fuegos_final', 'forestal', 'estacion_evac', 'nube_toxica', 'en_familia', 'avalancha'];
 
 const RESPUESTAS_DEFECTO = {
   es: {
@@ -141,6 +200,14 @@ const PROTOCOLOS = {
 
 // ---------- Niveles (40 minutos de turno cada uno) ----------
 const DURACION = 2400; // segundos reales por turno
+
+// Turno libre: sin final, con condiciones que cambian. Se completa al crear la partida (nivelLibre en juego.js).
+const LIBRE = {
+  titulo: 'Turno libre', hora: 20, zonas: ['centro', 'norte', 'poligono', 'puerto', 'bosque'], cada: [42, 66], libre: true,
+  unidades: [['P', 'com', 4], ['A', 'hos', 4], ['B', 'bom', 3], ['B', 'bom2', 1], ['H', 'hos', 2]],
+  intro: 'Turno sin final en toda Villaclara. Cada pocos minutos cambian las condiciones: tormentas, fiestas, turistas, olas de calor o apagones, y de vez en cuando una gran emergencia. Juega lo que quieras y termina el turno desde la pausa.',
+  nuevo: ['Turno infinito', 'Condiciones aleatorias', 'Grandes emergencias'], reto: ['Superar tu récord', () => false], guion: [],
+};
 
 // unidades: [tipo, base, cantidad]
 const NIVELES = [

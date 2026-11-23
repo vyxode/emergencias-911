@@ -32,6 +32,7 @@
         <button class="btn fantasma" data-a="sonido" id="btn-sonido-menu">🔊 Sonido</button>
         <button class="btn fantasma" data-a="voz" id="btn-voz-menu">🗣️ Voces</button>
       </div>
+      <div id="voces" class="voces"></div>
       <p id="ayuda-instalar" class="nota" hidden>Para instalarla: menú <b>⋮</b> de Chrome → <b>Instalar aplicación</b> (o «Añadir a pantalla de inicio»).</p>
     </div>
     <div class="cuadrante">
@@ -40,22 +41,21 @@
     </div>
   </section>
 
-  <!-- Juego -->
+  <!-- Juego: el mapa ocupa toda la pantalla y el resto flota encima -->
   <section id="juego" class="pantalla" hidden>
+    <canvas id="mapa"></canvas>
+    <div id="destello"></div>
     <header id="hud">
       <div class="hud-nivel"><span id="hud-num"></span><b id="hud-titulo"></b></div>
       <div class="hud-centro"><span id="hud-reloj">08:00</span><div class="hud-progreso"><i id="hud-barra"></i></div></div>
-      <div class="hud-der"><span id="hud-puntos">0</span><button class="btn-ic" data-a="sonido" id="btn-sonido">🔊</button><button class="btn-ic" data-a="pausa">⏸</button></div>
+      <div class="hud-der"><span id="hud-puntos">0</span><button class="btn-ic" data-a="sonido" id="btn-sonido">🔊</button><button class="btn-ic" data-a="pausa" aria-label="Pausa">⏸</button></div>
     </header>
-    <div id="izq">
-      <div id="lineas"></div>
-      <div id="llamada"></div>
-      <div id="radio"></div>
-    </div>
-    <div id="der">
-      <div id="mapa-caja"><canvas id="mapa"></canvas><div id="mapa-leyenda"></div></div>
-      <div id="despacho"></div>
-    </div>
+    <div id="radio"></div>
+    <div id="zoom"><button data-a="zoom-mas" aria-label="Acercar">+</button><button data-a="zoom-menos" aria-label="Alejar">−</button><button data-a="zoom-ver" aria-label="Ver toda la ciudad">⤢</button></div>
+    <div id="dock"></div>
+    <button id="btn-avisos" data-a="avisos">🚨 Avisos <b id="n-avisos">0</b></button>
+    <div id="lista-avisos" hidden></div>
+    <aside id="panel" hidden><nav id="panel-tabs"></nav><div id="panel-cuerpo"></div></aside>
   </section>
 
   <!-- Capas modales -->
@@ -64,6 +64,7 @@
   <script src="js/datos.js"></script>
   <script src="js/escenarios.js"></script>
   <script src="js/sonido.js"></script>
+  <script src="js/voz.js"></script>
   <script src="js/juego.js"></script>
 </body>
 </html>

@@ -32,9 +32,12 @@ const Sonido = (() => {
   }
 
   const efectos = {
-    // Timbre electrónico de centralita: trino de dos tonos a 20 Hz
-    timbre() {
-      for (let r = 0; r < 2; r++) for (let i = 0; i < 16; i++) tono(i % 2 ? 1150 : 920, r * 0.55 + i * 0.025, 0.03, { tipo: 'square', vol: 0.05 });
+    // Cada línea de la centralita tiene su timbre, para distinguirlas de oído
+    timbre(linea = 1) {
+      if (linea === 1) for (let r = 0; r < 2; r++) for (let i = 0; i < 16; i++) tono(i % 2 ? 1150 : 920, r * 0.55 + i * 0.025, 0.03, { tipo: 'square', vol: 0.05 });
+      else if (linea === 2) for (let i = 0; i < 4; i++) tono(i % 2 ? 1320 : 1100, i * 0.18, 0.14, { tipo: 'triangle', vol: 0.09 });
+      else if (linea === 3) for (let r = 0; r < 2; r++) { tono(660, r * 0.5, 0.35, { vol: 0.08 }); tono(880, r * 0.5, 0.35, { vol: 0.06 }); tono(1320, r * 0.5 + 0.02, 0.25, { vol: 0.03 }); }
+      else for (let i = 0; i < 3; i++) tono(1480, i * 0.12, 0.08, { tipo: 'sine', vol: 0.08 });
     },
     descolgar() { soplo(0, 0.05, { frec: 3000, vol: 0.3, tipo: 'highpass' }); tono(350, 0.04, 0.12, { vol: 0.05 }); },
     // Tono de ocupado español: 425 Hz cortado
@@ -63,9 +66,22 @@ const Sonido = (() => {
     alarma() { for (let i = 0; i < 3; i++) tono(880, i * 0.22, 0.15, { tipo: 'triangle', vol: 0.1 }); },
   };
 
-  function play(nombre) {
+  function play(nombre, arg) {
     if (!ctx || !opciones.sonido) return;
-    try { efectos[nombre](); } catch { /* audio no disponible */ }
+    try { efectos[nombre](arg); } catch { /* audio no disponible */ }
+  }
+
+  // Reproduce la voz neuronal con filtro de teléfono (300-3400 Hz). tasa < 1 la hace más grave.
+  let fuenteVoz = null;
+  function pcm({ pcm: datos, sr }, tasa = 1) {
+    if (!ctx || !opciones.voz) return;
+    callar();
+    const b = ctx.createBuffer(1, datos.length, sr); b.copyToChannel(datos, 0);
+    const s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter(), pk = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = b; s.playbackRate.value = tasa;
+    hp.type = 'highpass'; hp.frequency.value = 300; lp.type = 'lowpass'; lp.frequency.value = 3400;
+    pk.type = 'peaking'; pk.frequency.value = 1700; pk.gain.value = 5; g.gain.value = 1.8;
+    s.connect(hp).connect(lp).connect(pk).connect(g).connect(ctx.destination); s.start(); fuenteVoz = s;
   }
 
   // Zumbido de fondo de la sala (ruido marrón muy suave)
@@ -106,7 +122,11 @@ const Sonido = (() => {
     u.pitch = tono; u.rate = prisa ? 1.25 : 1.05; u.volume = 1;
     speechSynthesis.speak(u);
   }
-  const callar = () => window.speechSynthesis && speechSynthesis.cancel();
+  function callar() {
+    try { fuenteVoz?.stop(); } catch { /* ya parada */ }
+    fuenteVoz = null;
+    if (window.speechSynthesis) speechSynthesis.cancel();
+  }
 
   function config(o) {
     Object.assign(opciones, o);
@@ -114,5 +134,5 @@ const Sonido = (() => {
     if (!opciones.voz) callar();
   }
 
-  return { iniciar, play, ambienteOn, linea, hablar, callar, config, opciones };
+  return { iniciar, play, pcm, ambienteOn, linea, hablar, callar, config, opciones };
 })();
